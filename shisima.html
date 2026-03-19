@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shisima SESI - Versão Corrigida</title>
+    <style>
+        :root { --vermelho: #ff0000; --azul: #008cc1; --verde: #2ecc71; }
+        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; margin: 0; touch-action: manipulation; }
+        
+        /* Cabeçalho com Logos */
+        .header { 
+            width: 100%; background: white; padding: 10px 20px; 
+            display: flex; justify-content: space-between; align-items: center; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-bottom: 4px solid var(--vermelho);
+        }
+        .logo-sesi { height: 40px; }
+        .logo-clube { height: 50px; border-radius: 50%; border: 1px solid #eee; }
+
+        #status-box { 
+            background: white; padding: 15px; margin: 15px; border-radius: 15px; 
+            font-weight: bold; width: 85%; text-align: center; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); font-size: 1.2rem;
+        }
+
+        .game-area { background: white; border-radius: 20px; padding: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        svg { width: 85vw; height: 85vw; max-width: 380px; max-height: 380px; }
+        .linha { stroke: #ccc; stroke-width: 3; }
+        
+        .ponto { fill: #fdfdfd; stroke: #eee; stroke-width: 2; cursor: pointer; }
+        .ponto.pode-mover { fill: #e8f5e9; stroke: var(--verde); stroke-width: 4; stroke-dasharray: 5; }
+        
+        .peca { filter: drop-shadow(0 4px 4px rgba(0,0,0,0.2)); pointer-events: none; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .peca-v { fill: var(--vermelho); }
+        .peca-a { fill: var(--azul); }
+        .selecionado { stroke: var(--verde); stroke-width: 6; fill: #f0fff4; }
+
+        .btn-reset { 
+            margin-top: 20px; padding: 15px 40px; background: var(--vermelho); 
+            color: white; border: none; border-radius: 50px; font-weight: bold; 
+            font-size: 1rem; cursor: pointer; box-shadow: 0 4px 0 #b30000;
+        }
+        .btn-reset:active { transform: translateY(3px); box-shadow: none; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <img class="logo-sesi" src="img/sesi-seeklogo.png" alt="SESI">
+        
+        <img class="logo-clube" src="img/BEM-VINDOS.png" alt="Clube Mente em Movimento">
+    </div>
+
+    <div id="status-box">Carregando jogo...</div>
+
+    <div class="game-area">
+        <svg viewBox="0 0 400 400" id="tabuleiro">
+            <g id="linhas">
+                <line x1="200" y1="200" x2="200" y2="40" class="linha" />
+                <line x1="200" y1="200" x2="200" y2="360" class="linha" />
+                <line x1="200" y1="200" x2="40" y2="200" class="linha" />
+                <line x1="200" y1="200" x2="360" y2="200" class="linha" />
+                <line x1="200" y1="200" x2="87" y2="87" class="linha" />
+                <line x1="200" y1="200" x2="313" y2="313" class="linha" />
+                <line x1="200" y1="200" x2="87" y2="313" class="linha" />
+                <line x1="200" y1="200" x2="313" y2="87" class="linha" />
+                <path d="M200,40 L313,87 L360,200 L313,313 L200,360 L87,313 L40,200 L87,87 Z" fill="none" class="linha" />
+            </g>
+            <circle cx="200" cy="40" r="30" class="ponto" data-id="0" />
+            <circle cx="313" cy="87" r="30" class="ponto" data-id="1" />
+            <circle cx="360" cy="200" r="30" class="ponto" data-id="2" />
+            <circle cx="313" cy="313" r="30" class="ponto" data-id="3" />
+            <circle cx="200" cy="360" r="30" class="ponto" data-id="4" />
+            <circle cx="87" cy="313" r="30" class="ponto" data-id="5" />
+            <circle cx="40" cy="200" r="30" class="ponto" data-id="6" />
+            <circle cx="87" cy="87" r="30" class="ponto" data-id="7" />
+            <circle cx="200" cy="200" r="30" class="ponto" data-id="8" />
+        </svg>
+    </div>
+
+    <button class="btn-reset" onclick="reiniciar()">RECOMEÇAR JOGO</button>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function som(f, d) {
+            const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            o.frequency.value = f; g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + d);
+        }
+
+        const pos = [[200,40], [313,87], [360,200], [313,313], [200,360], [87,313], [40,200], [87,87], [200,200]];
+        const adj = [[7, 1, 8], [0, 2, 8], [1, 3, 8], [2, 4, 8], [3, 5, 8], [4, 6, 8], [5, 7, 8], [6, 0, 8], [0,1,2,3,4,5,6,7]];
+        let board = [1, 1, 1, 0, 2, 2, 2, 0, 0], turn = 1, sel = null, active = true;
+
+        function render() {
+            document.querySelectorAll('.peca').forEach(p => p.remove());
+            board.forEach((v, i) => {
+                if (v !== 0) {
+                    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    c.setAttribute("cx", pos[i][0]); c.setAttribute("cy", pos[i][1]);
+                    c.setAttribute("r", 22); c.classList.add("peca", v === 1 ? "peca-v" : "peca-a");
+                    document.getElementById('tabuleiro').appendChild(c);
+                }
+            });
+            const msg = document.getElementById('status-box');
+            if(active) {
+                msg.innerText = `Vez do: ${turn === 1 ? 'Jogador Vermelho' : 'Jogador Azul'}`;
+                msg.style.color = turn === 1 ? 'var(--vermelho)' : 'var(--azul)';
+            }
+        }
+
+        document.querySelectorAll('.ponto').forEach(ponto => {
+            ponto.addEventListener('click', () => {
+                if (!active) return;
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const id = parseInt(ponto.getAttribute('data-id'));
+
+                if (board[id] === turn) {
+                    sel = id; som(400, 0.1);
+                    document.querySelectorAll('.ponto').forEach(p => p.classList.remove('selecionado', 'pode-mover'));
+                    ponto.classList.add('selecionado');
+                    adj[id].forEach(a => { if(board[a] === 0) document.querySelector(`[data-id="${a}"]`).classList.add('pode-mover'); });
+                } else if (sel !== null && board[id] === 0 && adj[sel].includes(id)) {
+                    board[id] = turn; board[sel] = 0; sel = null;
+                    document.querySelectorAll('.ponto').forEach(p => p.classList.remove('selecionado', 'pode-mover'));
+                    
+                    // VERIFICA VITÓRIA ANTES DE TROCAR O TURNO
+                    const win = [[0,8,4], [1,8,5], [2,8,6], [3,8,7]].some(c => board[c[0]] !== 0 && board[c[0]] === board[c[1]] && board[c[1]] === board[c[2]]);
+                    
+                    if (win) { 
+                        render();
+                        document.getElementById('status-box').innerText = `🏆 VITÓRIA DO JOGADOR ${turn === 1 ? 'VERMELHO' : 'AZUL'}!`;
+                        document.getElementById('status-box').style.color = 'var(--verde)';
+                        active = false; som(600, 0.5);
+                    } else { 
+                        som(800, 0.1); 
+                        turn = (turn === 1) ? 2 : 1; 
+                        render();
+                    }
+                }
+            });
+        });
+
+        function reiniciar() { board = [1, 1, 1, 0, 2, 2, 2, 0, 0]; turn = 1; sel = null; active = true; render(); }
+        render();
+    </script>
+</body>
+</html>
